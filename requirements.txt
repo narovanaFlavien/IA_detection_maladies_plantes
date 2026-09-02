@@ -8,3 +8,4 @@ matplotlib
 seaborn
 mlflow
 dvc
+dvc_gdrive
