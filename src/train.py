@@ -171,7 +171,7 @@ def validate(
             )
             
             all_labels.extend(
-                labels.numpy()
+                labels.cpu().numpy()
             )
 
             total += labels.size(0)
