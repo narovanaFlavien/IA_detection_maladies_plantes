@@ -79,13 +79,13 @@ MODEL_INFO_FILENAME = "model_info.json"
 # CREATION DES DOSSIERS
 # ============================================================
 
-# for directory in [
-#     MODEL_DIR,
-#     OUTPUT_DIR,
-#     FIGURES_DIR,
-#     REPORTS_DIR
-# ]:
-#     directory.mkdir(
-#         parents=True,
-#         exist_ok=True
-#     )
+for directory in [
+    MODEL_DIR,
+    OUTPUT_DIR,
+    FIGURES_DIR,
+    REPORTS_DIR
+]:
+    directory.mkdir(
+        parents=True,
+        exist_ok=True
+    )
