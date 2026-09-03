@@ -73,3 +73,6 @@ def prepare_data():
                 )
 
     print("Séparation terminée.")
+
+if __name__ == "__main__":
+    prepare_data()

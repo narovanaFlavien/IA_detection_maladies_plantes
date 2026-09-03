@@ -32,7 +32,6 @@ from data import (
 )
 
 from model import create_model
-from preparation import prepare_data
 from evaluate import evaluate_model, calculate_metrics
 
 
@@ -182,14 +181,12 @@ def validate(
 
     epoch_loss = running_loss / total
 
-    epoch_accuracy = correct / total
-
     metrics = calculate_metrics(
         all_labels,
         all_predictions
     )
 
-    return epoch_loss, epoch_accuracy, metrics
+    return epoch_loss, metrics
 
 
 # ============================================================
@@ -199,7 +196,6 @@ def validate(
 def main():
 
     print("\nChargement des données...")
-    prepare_data()
     (
         train_loader,
         val_loader,
@@ -313,7 +309,7 @@ def main():
                 )
             )
 
-            val_loss, val_accuracy, val_metrics = (
+            val_loss, val_metrics = (
                 validate(
                     model,
                     val_loader,
@@ -357,7 +353,7 @@ def main():
                 "train_loss": train_loss,
                 "train_accuracy": train_accuracy,
                 "val_loss": val_loss,
-                "val_accuracy": val_accuracy,
+                "val_accuracy": val_metrics["accuracy"],
                 "val_precision":val_metrics["precision"],
                 "val_recall":val_metrics["recall"],
                 "val_f1":val_metrics["f1_score"],
@@ -368,7 +364,7 @@ def main():
                 f"Train Loss: {train_loss:.4f} | "
                 f"Train Acc: {train_accuracy:.4f} | "
                 f"Val Loss: {val_loss:.4f} | "
-                f"Val Acc: {val_accuracy:.4f}"
+                f"Val Acc: {val_metrics["accuracy"]:.4f}"
             )
 
             # --------------------------------------------
@@ -460,9 +456,13 @@ def main():
             "classification_report.txt"
         )
 
+
+        example_input = torch.randn(1, 3, IMAGE_SIZE, IMAGE_SIZE).to(device)
+
         mlflow.pytorch.log_model(
             model,
-            "model"
+            name="model",                # ou artifact_path="model" (déprécié)
+            input_example=example_input,
         )
 
 

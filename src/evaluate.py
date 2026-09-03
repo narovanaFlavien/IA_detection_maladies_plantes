@@ -195,7 +195,7 @@ def evaluate_model(
             all_labels,
             all_predictions,
             class_names,
-            output_path
+            f"{output_path}/confusion_matrix.png"
         )
     )
 

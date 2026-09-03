@@ -6,7 +6,6 @@ from pathlib import Path
 # ============================================================
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-print(PROJECT_ROOT)
 
 DATASET_DIR = PROJECT_ROOT / "data" / "processed"
 
@@ -89,3 +88,5 @@ for directory in [
         parents=True,
         exist_ok=True
     )
+if __name__ == "__main__":
+    print(PROJECT_ROOT)
