@@ -82,7 +82,12 @@ for directory in [
     MODEL_DIR,
     OUTPUT_DIR,
     FIGURES_DIR,
-    REPORTS_DIR
+    REPORTS_DIR,
+    DATASET_DIR,
+    TEST_DIR,
+    TRAIN_DIR,
+    VAL_DIR,
+
 ]:
     directory.mkdir(
         parents=True,
