@@ -458,12 +458,19 @@ def main():
 
 
         example_input = torch.randn(1, 3, IMAGE_SIZE, IMAGE_SIZE).to(device)
-
+        #Le problème est une exception mlflow.exceptions.MlflowException qui indique que le format de sérialisation ('pt2') que vous utilisez pour enregistrer votre modèle PyTorch avec MLflow ne prend pas en charge le type de signature d'entrée que vous fournissez. Pour résoudre cela, vous devriez soit spécifier la signature d'entrée en utilisant TensorSpec, soit changer le paramètre serialization_format à 'pickle' lors de l'appel à mlflow.pytorch.log_model.
         mlflow.pytorch.log_model(
             model,
-            name="model",                # ou artifact_path="model" (déprécié)
+            name="model",
             input_example=example_input,
+            serialization_format=mlflow.pytorch.SERIALIZATION_FORMAT_PICKLE
         )
+        # mlflow.pytorch.log_model(
+        #     model,
+        #     name="model",                # ou artifact_path="model" (déprécié)
+        #     input_example=example_input,
+        # )
+
 
 
 
