@@ -1,0 +1,9 @@
+                     precision    recall  f1-score   support
+
+Tomate_Alternariose     0.9868    0.9933    0.9900       150
+     Tomate_Mildiou     0.9933    0.9867    0.9900       150
+       Tomate_Saine     1.0000    1.0000    1.0000       151
+
+           accuracy                         0.9933       451
+          macro avg     0.9933    0.9933    0.9933       451
+       weighted avg     0.9934    0.9933    0.9933       451

@@ -1,0 +1,23 @@
+artifact_path: /content/IA_detection_maladies_plantes/mlruns/1/models/m-4a533468f4c144d4afaae1e0a42f3c7c/artifacts
+flavors:
+  python_function:
+    config:
+      device: null
+    data: data
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.pytorch
+    pickle_module_name: mlflow.pytorch.pickle_module
+    python_version: 3.13.15
+  pytorch:
+    code: null
+    model_data: data
+    pytorch_version: 2.11.0+cu128
+mlflow_version: 3.16.0
+model_id: m-4a533468f4c144d4afaae1e0a42f3c7c
+model_size_bytes: 16380847
+model_uuid: m-4a533468f4c144d4afaae1e0a42f3c7c
+prompts: null
+run_id: 62b0a6720f254296b7fa002b9c30b652
+utc_time_created: '2026-09-15 19:06:38.583137'
