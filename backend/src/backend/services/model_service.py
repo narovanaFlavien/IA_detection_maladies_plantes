@@ -57,7 +57,7 @@ model = efficientnet_b0(
 )
 
 model.classifier[1] = nn.Linear(
-    model.classifier[1].in_feature,
+    model.classifier[1].in_features,
     len(CLASS_NAMES)
 )
 
