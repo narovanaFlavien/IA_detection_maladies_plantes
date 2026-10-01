@@ -466,12 +466,13 @@ def find_mendeley_annotated_images(
     """
     results: list[tuple[Path, str, str]] = []
     stats = Counter()
+    extracted_dir = extracted_dir /  extracted_dir.rglob("*").__next__()
 
     annotated_dirs = [
         path
         for path in extracted_dir.rglob("*")
         if path.is_dir()
-        and normalize(path.name) == "tomatoleafmulticlass annotated"
+        and ((print(normalize(path.name))) is None) and normalize(path.name) == "tomatoleafmulticlass annotated"
     ]
 
     if not annotated_dirs:
