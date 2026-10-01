@@ -466,13 +466,20 @@ def find_mendeley_annotated_images(
     """
     results: list[tuple[Path, str, str]] = []
     stats = Counter()
+    print(extracted_dir)
+    for path in extracted_dir.rglob("*"):
+            print(path.name)
     extracted_dir = extracted_dir /  extracted_dir.rglob("*").__next__()
+    print(extracted_dir)
+
+    for path in extracted_dir.rglob("*"):
+        print(path.name)
 
     annotated_dirs = [
         path
         for path in extracted_dir.rglob("*")
         if path.is_dir()
-        and ((print(normalize(path.name))) is None) and normalize(path.name) == "tomatoleafmulticlass annotated"
+        and normalize(path.name) == "tomatoleafmulticlass (annotated)"
     ]
 
     if not annotated_dirs:
@@ -750,9 +757,9 @@ def main() -> None:
 
     ensure_dependencies()
     prepare_raw_directories()
-    clean_previous_generated_files()
+    # clean_previous_generated_files()
 
-    download_plantdoc()
+    # download_plantdoc()
     download_mendeley()
     download_tomato_village()
 
