@@ -6,7 +6,7 @@ IA_detection_maladies_plantes.
 
     git clone https://github.com/narovanaFlavien/IA_detection_maladies_plantes.git
     %cd IA_detection_maladies_plantes
-    python scripts/download_raw_datasets.py
+    python src/download_raw_datasets.py
 
 Le script crée/fusionne :
 
@@ -20,10 +20,22 @@ Sources :
 2. Tomato Leaf Dataset - Mendeley Data v1
 3. Tomato-Village - GitHub, Variant-a (Multiclass Classification)
 
-Important :
-- Le script ne fait PAS encore train/validation/test.
-- Il regroupe train/val/test de Tomato-Village dans les mêmes classes raw.
-- Les noms de fichiers sont préfixés par la source pour éviter les collisions.
+IMPORTANT :
+- Le script ne fait PAS le split train/validation/test final du projet.
+- Les splits train/valid/test des datasets externes sont regroupés dans
+  data/raw, puis votre pipeline de préparation pourra refaire le split.
+- Pour Mendeley, on utilise "TomatoLeafMulticlass (Annotated)" et ses
+  fichiers YOLO .txt pour retrouver la classe de chaque image.
+- "Raw Data" de Mendeley n'est PAS utilisé, car ses images ne sont pas
+  rangées dans des dossiers de classes.
+- "Annotated & Augmented" de Mendeley n'est PAS utilisé pour éviter
+  d'ajouter des images artificiellement augmentées à cette étape.
+- Les noms de fichiers sont préfixés par la source pour éviter les
+  collisions et permettre d'identifier la provenance.
+- Le script nettoie uniquement les fichiers précédemment générés par ce
+  script (préfixes plantdoc_, mendeley_, tomatovillage_) afin d'éviter les
+  doublons lors d'une nouvelle exécution. Les autres fichiers de data/raw
+  ne sont pas supprimés.
 """
 
 from __future__ import annotations
@@ -33,6 +45,7 @@ import subprocess
 import sys
 import tempfile
 import zipfile
+from collections import Counter
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -40,7 +53,8 @@ from urllib.request import Request, urlopen
 # Configuration
 # ---------------------------------------------------------------------------
 
-# Si le script est placé dans scripts/, le projet est son dossier parent.
+# Le script est prévu dans src/ ou scripts/ : dans les deux cas, le projet
+# est le dossier parent.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 RAW_DIR = PROJECT_ROOT / "data" / "raw"
@@ -68,7 +82,6 @@ TOMATO_VILLAGE_REPO = (
     "https://github.com/mamta-joshi-gehlot/Tomato-Village.git"
 )
 
-# Seule cette variante nous intéresse.
 TOMATO_VILLAGE_SUBDIR = "Variant-a(Multiclass Classification)"
 
 IMAGE_EXTENSIONS = {
@@ -80,6 +93,36 @@ IMAGE_EXTENSIONS = {
     ".tif",
     ".tiff",
 }
+
+# ---------------------------------------------------------------------------
+# Mendeley - mapping des IDs YOLO
+# ---------------------------------------------------------------------------
+
+# Dans la version Mendeley utilisée ici, les annotations YOLO codent les
+# classes avec les IDs suivants :
+#
+#   0 -> Early Blight
+#   1 -> Black Spot
+#   2 -> Late Blight
+#   3 -> Leaf Mold
+#   4 -> Bacterial Spot
+#   5 -> Target Spot
+#   6 -> Healthy
+#
+# Nous ne conservons que 0, 2 et 6.
+MENDELEY_YOLO_CLASSES = {
+    0: "Tomate_Alternariose",
+    2: "Tomate_Mildiou",
+    6: "Tomate_Saine",
+}
+
+# Fichiers générés par ce script. Ils seront supprimés au début d'une
+# nouvelle exécution pour rendre le script ré-exécutable sans duplication.
+GENERATED_PREFIXES = (
+    "plantdoc_",
+    "mendeley_",
+    "tomatovillage_",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -97,16 +140,10 @@ def normalize(text: str) -> str:
 
 
 def ensure_dependencies() -> None:
-    """
-    Installe uniquement les dépendances externes nécessaires.
-
-    Colab possède généralement déjà datasets/Pillow/requests,
-    mais cette fonction permet au script de rester autonome.
-    """
+    """Installe les dépendances externes nécessaires si elles manquent."""
     packages = {
         "datasets": "datasets",
         "PIL": "Pillow",
-        "requests": "requests",
         "tqdm": "tqdm",
     }
 
@@ -127,20 +164,52 @@ def ensure_dependencies() -> None:
 
 
 def prepare_raw_directories() -> None:
-    """Crée les trois classes finales sans supprimer les données existantes."""
+    """Crée les trois classes finales sans supprimer les autres données."""
     RAW_DIR.mkdir(parents=True, exist_ok=True)
 
     for class_dir in FINAL_CLASSES.values():
         (RAW_DIR / class_dir).mkdir(parents=True, exist_ok=True)
 
 
-def unique_destination(directory: Path, filename: str) -> Path:
+def clean_previous_generated_files() -> None:
     """
-    Retourne un chemin disponible.
+    Supprime uniquement les fichiers produits par les exécutions précédentes.
 
-    En principe les préfixes de source évitent déjà les collisions,
-    mais cette fonction protège aussi contre les doublons internes.
+    Cela évite qu'une deuxième exécution transforme :
+        mendeley_000001.jpg
+    en :
+        mendeley_000001_2.jpg
+        mendeley_000001_3.jpg
+        ...
+
+    Les éventuelles images PlantVillage déjà présentes dans data/raw ne sont
+    pas touchées.
     """
+    removed = 0
+
+    for class_dir in FINAL_CLASSES.values():
+        directory = RAW_DIR / class_dir
+
+        if not directory.exists():
+            continue
+
+        for path in directory.iterdir():
+            if not path.is_file():
+                continue
+
+            if path.name.startswith(GENERATED_PREFIXES):
+                path.unlink()
+                removed += 1
+
+    if removed:
+        print(
+            f"Nettoyage : {removed} fichier(s) généré(s) "
+            "par une exécution précédente supprimé(s)."
+        )
+
+
+def unique_destination(directory: Path, filename: str) -> Path:
+    """Retourne un chemin disponible sans écraser un fichier existant."""
     destination = directory / filename
 
     if not destination.exists():
@@ -148,7 +217,6 @@ def unique_destination(directory: Path, filename: str) -> Path:
 
     stem = destination.stem
     suffix = destination.suffix
-
     counter = 2
 
     while True:
@@ -163,19 +231,18 @@ def copy_image(
     final_class: str,
     source_prefix: str,
     index: int,
+    extra_name: str | None = None,
 ) -> Path:
-    """
-    Copie une image dans data/raw/<classe>/ avec un nom déterministe.
-    """
+    """Copie une image dans data/raw/<classe>."""
     destination_dir = RAW_DIR / final_class
 
-    extension = source.suffix.lower()
-    filename = f"{source_prefix}_{index:06d}{extension}"
+    if extra_name:
+        filename = f"{source_prefix}_{extra_name}_{index:06d}{source.suffix.lower()}"
+    else:
+        filename = f"{source_prefix}_{index:06d}{source.suffix.lower()}"
 
     destination = unique_destination(destination_dir, filename)
-
     shutil.copy2(source, destination)
-
     return destination
 
 
@@ -208,13 +275,7 @@ def print_final_counts() -> None:
 # ---------------------------------------------------------------------------
 
 def download_plantdoc() -> None:
-    """
-    Télécharge uniquement les trois labels PlantDoc nécessaires.
-
-    Le dataset HF contient 2 569 lignes, un seul split train et une colonne
-    image + label. Le label est un ClassLabel dont le nom peut être récupéré
-    via dataset.features["label"].names.
-    """
+    """Télécharge uniquement les trois classes PlantDoc nécessaires."""
     print("\n" + "=" * 70)
     print("1/3 - PLANTDOC / HUGGING FACE")
     print("=" * 70)
@@ -237,15 +298,7 @@ def download_plantdoc() -> None:
         "tomato early blight leaf": "Tomate_Alternariose",
     }
 
-    print("Labels disponibles recherchés :")
-    for label in wanted_labels:
-        print(f"  - {label}")
-
-    counters = {
-        "Tomate_Saine": 0,
-        "Tomate_Alternariose": 0,
-        "Tomate_Mildiou": 0,
-    }
+    counters = Counter()
 
     for row in dataset:
         numeric_label = row["label"]
@@ -259,15 +312,11 @@ def download_plantdoc() -> None:
         image = row["image"]
 
         if image is None:
-            print("Image ignorée : valeur image vide.")
+            print("Image PlantDoc ignorée : valeur image vide.")
             continue
 
-        # On convertit toutes les images en RGB/JPEG afin d'obtenir
-        # un format homogène dans data/raw.
-        with tempfile.NamedTemporaryFile(
-            suffix=".jpg",
-            delete=False,
-        ) as tmp:
+        # Normalisation en JPEG pour les images provenant de HF.
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
             temporary_path = Path(tmp.name)
 
         try:
@@ -289,8 +338,8 @@ def download_plantdoc() -> None:
             temporary_path.unlink(missing_ok=True)
 
     print("\nPlantDoc ajouté :")
-    for class_name, count in counters.items():
-        print(f"  {class_name:25s}: {count:5d}")
+    for class_name in FINAL_CLASSES.values():
+        print(f"  {class_name:25s}: {counters[class_name]:5d}")
 
 
 # ---------------------------------------------------------------------------
@@ -298,21 +347,17 @@ def download_plantdoc() -> None:
 # ---------------------------------------------------------------------------
 
 def download_file(url: str, destination: Path) -> None:
-    """Téléchargement streaming avec progression simple."""
+    """Téléchargement streaming avec progression."""
     print(f"Téléchargement : {url}")
 
     request = Request(
         url,
-        headers={
-            "User-Agent": "Mozilla/5.0",
-        },
+        headers={"User-Agent": "Mozilla/5.0"},
     )
 
     with urlopen(request) as response:
         total = response.headers.get("Content-Length")
-
-        if total is not None:
-            total = int(total)
+        total = int(total) if total else None
 
         downloaded = 0
         chunk_size = 1024 * 1024
@@ -338,66 +383,155 @@ def download_file(url: str, destination: Path) -> None:
     print()
 
 
-def find_mendeley_raw_images(extracted_dir: Path) -> list[tuple[Path, str]]:
+def parse_mendeley_yolo_label(label_file: Path) -> tuple[str | None, str]:
     """
-    Recherche les images dans le dossier 'Raw Data' du ZIP Mendeley.
+    Lit un fichier d'annotation YOLO Mendeley.
 
-    La documentation du dataset indique :
-      Tomato Leaf Multiclass (Raw Data)
-          ├── Early Blight
-          ├── Black Spot
-          ├── Late Blight
-          ├── Leaf Mold
-          ├── Bacterial Spot
-          ├── Target Spot
-          └── Healthy
+    Retourne :
+        (classe_finale, statut)
 
-    On privilégie explicitement Raw Data afin de ne pas recopier les
-    images présentes une deuxième fois dans la version annotée.
+    statuts possibles :
+        - "ok"
+        - "empty"
+        - "invalid"
+        - "unknown_class"
+        - "ambiguous"
+
+    Une image n'est retenue que si toutes ses annotations appartiennent à
+    une seule des trois classes que nous voulons conserver.
     """
-    wanted = {
-        "early blight": "Tomate_Alternariose",
-        "late blight": "Tomate_Mildiou",
-        "healthy": "Tomate_Saine",
-    }
+    class_ids: list[int] = []
 
-    results = []
+    try:
+        content = label_file.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return None, "invalid"
 
-    for path in extracted_dir.rglob("*"):
-        if not path.is_file():
+    for line_number, raw_line in enumerate(content.splitlines(), start=1):
+        line = raw_line.strip()
+
+        if not line:
             continue
 
-        if path.suffix.lower() not in IMAGE_EXTENSIONS:
-            continue
+        fields = line.split()
 
-        parts_normalized = [normalize(part) for part in path.parts]
+        # Format YOLO minimal : class_id x_center y_center width height
+        if len(fields) < 5:
+            return None, f"invalid_line_{line_number}"
 
-        # On ne veut que la partie "Raw Data".
-        has_raw_data = any(
-            "raw data" in part
-            for part in parts_normalized
+        try:
+            class_id = int(float(fields[0]))
+        except ValueError:
+            return None, f"invalid_class_id_{line_number}"
+
+        class_ids.append(class_id)
+
+    if not class_ids:
+        return None, "empty"
+
+    unique_ids = set(class_ids)
+
+    # Une image contenant plusieurs classes différentes est ambiguë pour
+    # notre tâche de classification mono-classe.
+    if len(unique_ids) > 1:
+        return None, "ambiguous"
+
+    class_id = class_ids[0]
+
+    if class_id not in MENDELEY_YOLO_CLASSES:
+        return None, "unknown_class"
+
+    return MENDELEY_YOLO_CLASSES[class_id], "ok"
+
+
+def find_mendeley_annotated_images(
+    extracted_dir: Path,
+) -> tuple[list[tuple[Path, str, str]], Counter]:
+    """
+    Recherche les images dans :
+
+        TomatoLeafMulticlass (Annotated)/
+            train/images/
+            train/labels/
+            valid/images/
+            valid/labels/
+            test/images/
+            test/labels/
+
+    Pour chaque image, son fichier .txt ayant le même stem est recherché.
+    Le premier champ de l'annotation YOLO donne le class_id.
+
+    Retourne :
+        images valides + statistiques de diagnostic.
+    """
+    results: list[tuple[Path, str, str]] = []
+    stats = Counter()
+
+    annotated_dirs = [
+        path
+        for path in extracted_dir.rglob("*")
+        if path.is_dir()
+        and normalize(path.name) == "tomatoleafmulticlass annotated"
+    ]
+
+    if not annotated_dirs:
+        raise RuntimeError(
+            "Le dossier 'TomatoLeafMulticlass (Annotated)' est introuvable "
+            "dans l'archive Mendeley."
         )
 
-        if not has_raw_data:
+    annotated_dir = annotated_dirs[0]
+
+    for split in ("train", "valid", "val", "test"):
+        split_dir = annotated_dir / split
+
+        if not split_dir.exists():
             continue
 
-        matched_class = None
+        images_dir = split_dir / "images"
+        labels_dir = split_dir / "labels"
 
-        for part in reversed(parts_normalized):
-            if part in wanted:
-                matched_class = wanted[part]
-                break
+        if not images_dir.exists():
+            continue
 
-        if matched_class:
-            results.append((path, matched_class))
+        if not labels_dir.exists():
+            print(f"Attention : labels absent pour '{split}'.")
+            continue
 
-    return results
+        for image_path in images_dir.iterdir():
+            if not image_path.is_file():
+                continue
+
+            if image_path.suffix.lower() not in IMAGE_EXTENSIONS:
+                continue
+
+            stats["images_found"] += 1
+
+            label_path = labels_dir / f"{image_path.stem}.txt"
+
+            if not label_path.exists():
+                stats["missing_label"] += 1
+                continue
+
+            final_class, status = parse_mendeley_yolo_label(label_path)
+
+            if status != "ok":
+                stats[status] += 1
+                continue
+
+            # split est conservé uniquement comme information de provenance.
+            results.append((image_path, final_class, split))
+            stats["images_selected"] += 1
+
+    return results, stats
 
 
 def download_mendeley() -> None:
     """
-    Télécharge le ZIP Mendeley v1, l'extrait dans un répertoire temporaire,
-    puis ne récupère que Healthy/Early Blight/Late Blight.
+    Télécharge le ZIP Mendeley v1 et utilise la version Annotated.
+
+    Le dossier Raw Data est volontairement ignoré : il contient les images
+    sans organisation par classe dans l'archive actuellement téléchargée.
     """
     print("\n" + "=" * 70)
     print("2/3 - TOMATO LEAF DATASET / MENDELEY")
@@ -405,7 +539,6 @@ def download_mendeley() -> None:
 
     with tempfile.TemporaryDirectory() as temp:
         temp_dir = Path(temp)
-
         zip_path = temp_dir / "tomato_leaf_dataset.zip"
         extract_dir = temp_dir / "extracted"
 
@@ -417,34 +550,57 @@ def download_mendeley() -> None:
         with zipfile.ZipFile(zip_path, "r") as archive:
             archive.extractall(extract_dir)
 
-        print("Recherche des images dans 'Raw Data'...")
-        images = find_mendeley_raw_images(extract_dir)
+        print("Recherche des images dans 'Annotated'...")
+        print("Lecture des labels YOLO (.txt)...")
+
+        images, stats = find_mendeley_annotated_images(extract_dir)
 
         if not images:
             raise RuntimeError(
-                "Aucune image Mendeley trouvée dans le dossier "
-                "'Raw Data'. La structure du ZIP semble avoir changé."
+                "Aucune image Mendeley exploitable n'a été trouvée dans "
+                "'TomatoLeafMulticlass (Annotated)'.\n"
+                f"Statistiques : {dict(stats)}"
             )
 
-        counters = {
-            "Tomate_Saine": 0,
-            "Tomate_Alternariose": 0,
-            "Tomate_Mildiou": 0,
-        }
+        counters = Counter()
+        split_counters = Counter()
 
-        for source, final_class in images:
+        for source, final_class, split in images:
             counters[final_class] += 1
+            split_counters[split] += 1
 
-            copy_image(
-                source=source,
-                final_class=final_class,
-                source_prefix="mendeley",
-                index=counters[final_class],
-            )
+            # Le nom d'origine est conservé pour faciliter la traçabilité.
+            # Exemple : mendeley_train_IMG_0212_....jpg
+            safe_original_name = source.name
+            destination_dir = RAW_DIR / final_class
 
-        print("\nMendeley ajouté :")
-        for class_name, count in counters.items():
-            print(f"  {class_name:25s}: {count:5d}")
+            filename = f"mendeley_{split}_{safe_original_name}"
+            destination = unique_destination(destination_dir, filename)
+            shutil.copy2(source, destination)
+
+        print("\nMendeley ajouté depuis 'Annotated' :")
+        for class_name in FINAL_CLASSES.values():
+            print(f"  {class_name:25s}: {counters[class_name]:5d}")
+
+        print("\nRépartition des images sélectionnées par split :")
+        for split in ("train", "valid", "val", "test"):
+            if split_counters[split]:
+                print(f"  {split:25s}: {split_counters[split]:5d}")
+
+        print("\nDiagnostic Mendeley :")
+        print(f"  Images trouvées              : {stats['images_found']}")
+        print(f"  Images sélectionnées         : {stats['images_selected']}")
+        print(f"  Labels manquants             : {stats['missing_label']}")
+        print(f"  Labels vides                 : {stats['empty']}")
+        print(f"  Annotations ambiguës         : {stats['ambiguous']}")
+        print(f"  Classes non retenues         : {stats['unknown_class']}")
+
+        invalid_total = sum(
+            value
+            for key, value in stats.items()
+            if key.startswith("invalid")
+        )
+        print(f"  Labels invalides             : {invalid_total}")
 
 
 # ---------------------------------------------------------------------------
@@ -452,11 +608,7 @@ def download_mendeley() -> None:
 # ---------------------------------------------------------------------------
 
 def clone_tomato_village(destination: Path) -> None:
-    """
-    Clone uniquement Variant-a(Multiclass Classification) grâce au sparse
-    checkout afin d'éviter de récupérer les variantes multi-label/object
-    detection qui ne sont pas nécessaires ici.
-    """
+    """Clone uniquement Variant-a(Multiclass Classification)."""
     if destination.exists():
         shutil.rmtree(destination)
 
@@ -491,19 +643,8 @@ def clone_tomato_village(destination: Path) -> None:
 
 def find_tomato_village_images(
     variant_dir: Path,
-) -> list[tuple[Path, str]]:
-    """
-    Recherche récursivement dans train/, val/ et test/.
-
-    Les trois splits sont volontairement regroupés : le script de
-    préparation du dataset fera la nouvelle séparation ultérieurement.
-
-    Seules les classes :
-        Healthy
-        Early Blight
-        Late Blight
-    sont conservées.
-    """
+) -> list[tuple[Path, str, str]]:
+    """Recherche les classes utiles dans train/val/test de Variant-a."""
     wanted = {
         "healthy": "Tomate_Saine",
         "early blight": "Tomate_Alternariose",
@@ -521,32 +662,30 @@ def find_tomato_village_images(
 
         normalized_parts = [normalize(part) for part in path.parts]
 
-        # Vérification que l'image provient bien de train/val/test.
-        if not any(
-            part in {"train", "val", "test"}
-            for part in normalized_parts
-        ):
+        split = None
+        for candidate in ("train", "val", "valid", "test"):
+            if candidate in normalized_parts:
+                split = candidate
+                break
+
+        if split is None:
             continue
 
         matched_class = None
 
-        # On parcourt le chemin depuis la fin : le dossier de classe
-        # est normalement le parent direct ou proche de l'image.
         for part in reversed(normalized_parts):
             if part in wanted:
                 matched_class = wanted[part]
                 break
 
         if matched_class:
-            results.append((path, matched_class))
+            results.append((path, matched_class, split))
 
     return results
 
 
 def download_tomato_village() -> None:
-    """
-    Clone Tomato-Village Variant-a et fusionne train + val + test.
-    """
+    """Clone Tomato-Village Variant-a et fusionne ses splits."""
     print("\n" + "=" * 70)
     print("3/3 - TOMATO-VILLAGE / GITHUB")
     print("=" * 70)
@@ -572,26 +711,29 @@ def download_tomato_village() -> None:
                 "La structure du dépôt semble avoir changé."
             )
 
-        counters = {
-            "Tomate_Saine": 0,
-            "Tomate_Alternariose": 0,
-            "Tomate_Mildiou": 0,
-        }
+        counters = Counter()
+        split_counters = Counter()
 
-        # Les trois splits sont tous parcourus.
-        for source, final_class in images:
+        for source, final_class, split in images:
             counters[final_class] += 1
+            split_counters[split] += 1
 
             copy_image(
                 source=source,
                 final_class=final_class,
                 source_prefix="tomatovillage",
                 index=counters[final_class],
+                extra_name=split,
             )
 
         print("\nTomato-Village ajouté :")
-        for class_name, count in counters.items():
-            print(f"  {class_name:25s}: {count:5d}")
+        for class_name in FINAL_CLASSES.values():
+            print(f"  {class_name:25s}: {counters[class_name]:5d}")
+
+        print("\nRépartition par split :")
+        for split in ("train", "val", "valid", "test"):
+            if split_counters[split]:
+                print(f"  {split:25s}: {split_counters[split]:5d}")
 
 
 # ---------------------------------------------------------------------------
@@ -602,11 +744,12 @@ def main() -> None:
     print("=" * 70)
     print("COLLECTE DES DATASETS - IA_detection_maladies_plantes")
     print("=" * 70)
-    print(f"Projet : {PROJECT_ROOT}")
+    print(f"Projet      : {PROJECT_ROOT}")
     print(f"Destination : {RAW_DIR}")
 
     ensure_dependencies()
     prepare_raw_directories()
+    clean_previous_generated_files()
 
     download_plantdoc()
     download_mendeley()
@@ -615,8 +758,9 @@ def main() -> None:
     print_final_counts()
 
     print("\nTerminé.")
-    print("Aucune séparation train/validation/test n'a été effectuée.")
-    print("Les données sont maintenant regroupées dans data/raw/.")
+    print("Aucune séparation train/validation/test finale n'a été effectuée.")
+    print("Les données sont regroupées dans data/raw/." )
+    print("Les fichiers Mendeley proviennent de la version Annotated.")
 
 
 if __name__ == "__main__":
