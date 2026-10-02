@@ -111,9 +111,9 @@ IMAGE_EXTENSIONS = {
 #
 # Nous ne conservons que 0, 2 et 6.
 MENDELEY_YOLO_CLASSES = {
-    0: "Tomate_Alternariose",
-    2: "Tomate_Mildiou",
-    6: "Tomate_Saine",
+    1: "Tomate_Alternariose",
+    3: "Tomate_Mildiou",
+    7: "Tomate_Saine",
 }
 
 # Fichiers générés par ce script. Ils seront supprimés au début d'une
