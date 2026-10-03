@@ -33,6 +33,7 @@ from data import (
 
 from model import create_model
 from evaluate import evaluate_model, calculate_metrics
+from download_raw_datasets_v2 import unique_destination
 
 
 # ============================================================
@@ -399,11 +400,7 @@ def main():
         # SAUVEGARDER LE MODELE
         # ================================================
 
-        model_path = (
-            MODEL_DIR /
-            MODEL_FILENAME
-        )
-
+        model_path = unique_destination(MODEL_DIR, MODEL_FILENAME)
         torch.save(
             model.state_dict(),
             model_path

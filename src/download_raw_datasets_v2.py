@@ -297,6 +297,8 @@ MENDELEY_YOLO_NAMES = {
 # début d'une nouvelle exécution pour rendre le script ré-exécutable sans
 # duplication.
 SOURCE_PREFIXES = {
+    #si on modifie cette portion de code il faut également modifier
+    #celle qui se trouve dans preparation.py (ligne 117)
     "plantdoc": "plantdoc_",
     "mendeley": "mendeley_",
     "tomatovillage": "tomatovillage_",

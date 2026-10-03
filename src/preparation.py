@@ -97,7 +97,9 @@ PHASH_DISTANCE_THRESHOLD = 5
 # Une classe/source absente de ce dictionnaire n'a aucune limite.
 SOURCE_CLASS_LIMITS: dict[str, dict[str, int]] = {
     "plantvillage": {
+        "Tomato_Healthy":500,
         "Tomato_Early_Blight": 500,
+        "Tomato_Late_Blight":500
     },
 }
 
