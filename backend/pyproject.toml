@@ -21,3 +21,10 @@ build-backend = "uv_build"
 
 [tool.fastapi]
 entrypoint = "backend.main:app"
+
+[dependency-groups]
+dev = ["pytest>=8", "httpx>=0.28"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
