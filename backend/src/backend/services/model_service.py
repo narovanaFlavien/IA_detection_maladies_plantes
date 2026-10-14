@@ -50,10 +50,10 @@ with open(
 # CREATION DU MODELE
 # ============================================================
 
-weights = EfficientNet_B0_Weights.DEFAULT
+# weights = EfficientNet_B0_Weights.DEFAULT
 
 model = efficientnet_b0(
-    weights=weights
+    weights=None
 )
 
 model.classifier[1] = nn.Linear(
