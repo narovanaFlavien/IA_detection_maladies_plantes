@@ -19,7 +19,7 @@ from .preprocessing import inference_transform
 BACKEND_DIR = Path(__file__).resolve().parents[3]
 PROJECT_ROOT = BACKEND_DIR.parent
 MODEL_DIR = PROJECT_ROOT / "models"
-MODEL_PATH = MODEL_DIR / "efficientnet_b0_v1.pt"
+MODEL_PATH = MODEL_DIR / "efficientnet_b0_v1_2.pt"
 CLASSES_PATH = MODEL_DIR / "classes.json"
 
 

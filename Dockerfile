@@ -25,7 +25,7 @@ RUN pip install "fastapi[standard]>=0.141.1" pillow
 
 # Disposition attendue par model_service.py : <racine>/backend et <racine>/models
 COPY --chown=user backend/ /app/backend/
-COPY --chown=user models/ /app/models/
+COPY --chown=user models/efficientnet_b0_v1_2.pt /app/models/efficientnet_b0_v1_2.pt
 COPY --from=frontend-build --chown=user /frontend/dist /app/static
 
 ENV STATIC_DIR=/app/static HOME=/home/user
